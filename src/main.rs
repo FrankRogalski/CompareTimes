@@ -10,6 +10,8 @@ use rand::random;
 #[derive(Debug)]
 struct Squared;
 #[derive(Debug)]
+struct SquaredWithBreak;
+#[derive(Debug)]
 struct Binary;
 #[derive(Debug)]
 struct BinarySwitchedOrder;
@@ -52,59 +54,50 @@ impl Intersect for Squared {
     }
 }
 
-impl Intersect for Binary {
+impl Intersect for SquaredWithBreak {
     fn intersect(&self, a: &[usize], b: &[usize]) -> Vec<usize> {
         let mut result = vec![];
-        let (big, small) = if a.len() > b.len() { (a, b) } else { (b, a) };
-        let small = BTreeSet::from_iter(small);
-        for i in big {
-            if small.contains(i) {
-                result.push(*i);
+        for i in a {
+            for j in b {
+                if i == j {
+                    result.push(*i);
+                    break;
+                }
             }
         }
         result
+    }
+}
+
+impl Intersect for Binary {
+    fn intersect(&self, a: &[usize], b: &[usize]) -> Vec<usize> {
+        let (big, small) = if a.len() > b.len() { (a, b) } else { (b, a) };
+        let small = BTreeSet::from_iter(small);
+        big.iter().filter(|i| small.contains(i)).copied().collect()
     }
 }
 
 impl Intersect for BinarySwitchedOrder {
     fn intersect(&self, a: &[usize], b: &[usize]) -> Vec<usize> {
-        let mut result = vec![];
         let (big, small) = if a.len() > b.len() { (b, a) } else { (a, b) };
         let small = BTreeSet::from_iter(small);
-        for i in big {
-            if small.contains(i) {
-                result.push(*i);
-            }
-        }
-        result
+        big.iter().filter(|i| small.contains(i)).copied().collect()
     }
 }
 
 impl Intersect for Hash {
     fn intersect(&self, a: &[usize], b: &[usize]) -> Vec<usize> {
-        let mut result = vec![];
         let (big, small) = if a.len() > b.len() { (a, b) } else { (b, a) };
-        let small: HashSet<usize> = small.into_iter().cloned().collect();
-        for i in big {
-            if small.contains(i) {
-                result.push(*i);
-            }
-        }
-        result
+        let small: HashSet<usize> = small.iter().copied().collect();
+        big.iter().filter(|i| small.contains(i)).copied().collect()
     }
 }
 
 impl Intersect for HashSwitchedOrder {
     fn intersect(&self, a: &[usize], b: &[usize]) -> Vec<usize> {
-        let mut result = vec![];
         let (big, small) = if a.len() > b.len() { (b, a) } else { (a, b) };
-        let small: HashSet<usize> = small.into_iter().cloned().collect();
-        for i in big {
-            if small.contains(i) {
-                result.push(*i);
-            }
-        }
-        result
+        let small: HashSet<usize> = small.iter().copied().collect();
+        big.iter().filter(|i| small.contains(i)).cloned().collect()
     }
 }
 
@@ -118,33 +111,32 @@ fn rand_array() -> Vec<usize> {
 }
 
 fn main() -> Result<(), Error> {
-    let mut products: Vec<Product> = vec![];
-    products.push(Product::new(Box::new(Squared {})));
-    products.push(Product::new(Box::new(Binary {})));
-    products.push(Product::new(Box::new(BinarySwitchedOrder {})));
-    products.push(Product::new(Box::new(Hash {})));
-    products.push(Product::new(Box::new(HashSwitchedOrder {})));
+    let mut products: [Product; 6] = [
+        Product::new(Box::new(Squared {})),
+        Product::new(Box::new(SquaredWithBreak {})),
+        Product::new(Box::new(Binary {})),
+        Product::new(Box::new(BinarySwitchedOrder {})),
+        Product::new(Box::new(Hash {})),
+        Product::new(Box::new(HashSwitchedOrder {})),
+    ];
     let start = SystemTime::now();
-    let a = rand_array();
-    let b = rand_array();
-    println!(
-        "generated test data took {:?}",
-        SystemTime::now().duration_since(start)?
-    );
+    let (a, b) = (rand_array(), rand_array());
+    println!("generated test data took {:?}", start.elapsed()?);
     println!("the arrays have the sizes {} and {}\n", a.len(), b.len());
 
     for product in products.iter_mut() {
         println!("testing function {:?}", product.method);
         let start = SystemTime::now();
         product.result = product.method.intersect(&a, &b);
-        product.time = SystemTime::now().duration_since(start)?;
+        product.time = start.elapsed()?;
         println!(
             "finished testing function {:?} it took {:?}\n",
             product.method, product.time
         );
     }
 
-    products.sort_by(|a, b| b.time.cmp(&a.time));
+    products.sort_by_key(|a| a.time);
+    products.reverse();
     products.windows(2).for_each(|values| {
         println!(
             "{:?} is {:.2} times faster than {:?}",
