@@ -80,7 +80,7 @@ impl Intersect for Binary {
 
 impl Intersect for Hash {
     fn intersect(&self, big: &[usize], small: &[usize]) -> Vec<usize> {
-        let small: HashSet<usize> = small.into_iter().copied().collect();
+        let small: HashSet<usize> = small.iter().copied().collect();
         big.par_iter()
             .filter(|i| small.contains(i))
             .copied()
